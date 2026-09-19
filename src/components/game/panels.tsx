@@ -94,6 +94,111 @@ export function ResourceChip({
   );
 }
 
+export function VillageDock({
+  state,
+  selected,
+  now,
+}: {
+  state: GameState;
+  selected: BuildingId;
+  now: number;
+}) {
+  const upgrade = useGame((s) => s.upgrade);
+  const collect = useGame((s) => s.collect);
+  const daily = useGame((s) => s.daily);
+  const setSelected = useGame((s) => s.setSelected);
+  const building = state.buildings.find((b) => b.id === selected)!;
+  const def = BUILDINGS[selected];
+  const cost = getUpgradeCost(state, selected);
+  const cap = maxBuildLevel(state, selected);
+  const busy = state.buildings.some((b) => b.upgradeEndsAt && b.upgradeEndsAt > now);
+  const pending = getPendingResources(state, now);
+  const dailyReady = now - state.lastDailyAt >= 24 * 60 * 60 * 1000;
+  const canPay = state.euros >= cost.euros && state.oil >= cost.oil && building.level < cap && !busy;
+  const upgrading = Boolean(building.upgradeEndsAt && building.upgradeEndsAt > now);
+
+  return (
+    <div className="shrink-0 border-t border-line bg-paper px-2.5 pb-2 pt-2">
+      <div className="grid grid-cols-6 gap-1">
+        {state.buildings.map((b) => {
+          const BIcon = buildingIcons[b.id];
+          const active = b.id === selected;
+          return (
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => setSelected(b.id)}
+              aria-label={`${BUILDINGS[b.id].name}, livello ${b.level}`}
+              aria-pressed={active}
+              className={`flex min-h-12 flex-col items-center justify-center rounded-2xl ${
+                active ? "bg-pine text-paper" : "bg-cream text-ink"
+              }`}
+            >
+              <BIcon size={16} />
+              <span className="mt-0.5 text-[10px] font-semibold tabular-nums opacity-80">Lv.{b.level}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-2 flex items-center gap-2 rounded-[22px] bg-cream p-2">
+        <span className="grid size-12 shrink-0 overflow-hidden rounded-2xl bg-pine">
+          <img src={`/sprites/${selected}.png`} alt="" className="h-full w-full object-contain" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+            Livello {building.level}
+          </p>
+          <h2 className="truncate font-display text-[15px] font-semibold leading-tight text-ink">{def.name}</h2>
+          {upgrading && building.upgradeEndsAt ? (
+            <p className="text-xs font-semibold text-grove">Cantiere · {formatTimer(building.upgradeEndsAt - now)}</p>
+          ) : (
+            <p className="truncate text-xs text-muted">{def.description}</p>
+          )}
+        </div>
+        {upgrading ? null : building.level >= cap ? (
+          <span className="shrink-0 px-2 text-xs font-semibold text-muted">Max</span>
+        ) : (
+          <button
+            type="button"
+            disabled={!canPay}
+            onClick={() => upgrade(selected)}
+            className="flex min-h-11 shrink-0 flex-col items-end justify-center rounded-2xl bg-terracotta px-3 font-semibold text-pine-deep disabled:opacity-45"
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-wider">Potenzia</span>
+            <span className="font-display text-sm leading-none">
+              {formatIt(cost.euros)}€ · {formatIt(cost.oil)}L
+            </span>
+          </button>
+        )}
+      </div>
+
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={collect}
+          className="min-h-11 rounded-2xl bg-pine px-3 text-sm font-semibold text-paper"
+        >
+          Riscuoti
+          {(pending.euros > 0 || pending.oil > 0) && (
+            <span className="ml-1 font-medium text-gold">
+              +{formatIt(pending.euros)} / +{formatIt(pending.oil)}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={daily}
+          disabled={!dailyReady}
+          className="min-h-11 rounded-2xl bg-cream px-3 text-sm font-semibold text-ink disabled:opacity-45"
+        >
+          Fondo del giorno
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function BuildingPanel({ state, selected, now }: { state: GameState; selected: BuildingId; now: number }) {
   const upgrade = useGame((s) => s.upgrade);
   const collect = useGame((s) => s.collect);

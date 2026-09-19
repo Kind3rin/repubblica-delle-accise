@@ -545,5 +545,5 @@ export function Village3D({ state, selected, onSelect, reducedMotion, onContextL
     };
   }, [reducedMotion]);
 
-  return <div ref={wrapRef} className="relative h-full min-h-0 w-full overflow-hidden" aria-label="Villaggio in 3D" />;
+  return <div ref={wrapRef} className="absolute inset-0 overflow-hidden" aria-label="Villaggio in 3D" />;
 }

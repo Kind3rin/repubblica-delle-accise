@@ -32,6 +32,7 @@ import {
   DiaryView,
   RaidView,
   ResourceChip,
+  VillageDock,
 } from "./panels";
 
 const NAV: { id: Tab; label: string; icon: typeof Map }[] = [
@@ -192,8 +193,8 @@ export function GameShell() {
 
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {tab === "village" ? (
-          <div className="grid min-h-0 flex-1 grid-rows-[minmax(240px,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_340px] lg:grid-rows-none">
-            <section className="relative min-h-0">
+          <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_340px] lg:grid-rows-none">
+            <section className="relative min-h-0 overflow-hidden">
               <VillageView
                 state={state}
                 selected={selected}
@@ -204,13 +205,16 @@ export function GameShell() {
                 <button
                   type="button"
                   onClick={collect}
-                  className="absolute bottom-3 left-3 z-10 min-h-11 rounded-full bg-pine px-4 py-2 text-sm font-semibold text-paper shadow-[0_4px_0_rgba(17,45,37,0.35)]"
+                  className="absolute bottom-3 left-3 z-10 hidden min-h-11 rounded-full bg-pine px-4 py-2 text-sm font-semibold text-paper shadow-[0_4px_0_rgba(17,45,37,0.35)] lg:inline-flex"
                 >
                   Riscuoti · {Math.floor(pending.euros)} € · {Math.floor(pending.oil)} L
                 </button>
               )}
             </section>
-            <aside className="min-h-0 max-h-[50%] overflow-y-auto border-t border-line bg-paper px-3 py-2 lg:max-h-none lg:border-l lg:border-t-0 lg:py-4">
+            <div className="lg:hidden">
+              <VillageDock state={state} selected={selected} now={now} />
+            </div>
+            <aside className="hidden min-h-0 overflow-y-auto border-l border-line bg-paper px-3 py-4 lg:block">
               <BuildingPanel state={state} selected={selected} now={now} />
             </aside>
           </div>
@@ -255,7 +259,7 @@ export function GameShell() {
       {(toast || error) && !battle && (
         <div
           role="status"
-          className={`fixed left-1/2 top-[8.5rem] z-30 w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl px-4 py-3 text-sm shadow-lg ${
+          className={`fixed inset-x-4 bottom-[5.75rem] z-30 rounded-2xl px-4 py-3 text-sm shadow-[0_8px_24px_rgba(17,45,37,0.22)] sm:inset-x-auto sm:left-1/2 sm:w-[min(92vw,420px)] sm:-translate-x-1/2 ${
             error ? "bg-[#6a3b2c] text-paper" : "bg-pine text-paper"
           }`}
         >
@@ -490,7 +494,7 @@ function BattleOverlay() {
                 );
               })}
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1fr_auto_auto]">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => deploy(unit, 1, lane)}
@@ -509,19 +513,17 @@ function BattleOverlay() {
                 type="button"
                 disabled={battle.rallyUntil !== 0}
                 onClick={() => ability("rally")}
-                aria-label="Adunata"
-                className="grid min-h-12 place-items-center rounded-2xl bg-cream disabled:opacity-40"
+                className="flex min-h-12 items-center justify-center gap-1.5 rounded-2xl bg-cream text-sm font-semibold disabled:opacity-40"
               >
-                <Megaphone size={18} />
+                <Megaphone size={16} /> Adunata
               </button>
               <button
                 type="button"
                 disabled={battle.smokeUntil !== 0}
                 onClick={() => ability("smoke")}
-                aria-label="Fumogeno"
-                className="grid min-h-12 place-items-center rounded-2xl bg-cream disabled:opacity-40"
+                className="flex min-h-12 items-center justify-center gap-1.5 rounded-2xl bg-cream text-sm font-semibold disabled:opacity-40"
               >
-                <CloudFog size={18} />
+                <CloudFog size={16} /> Fumogeno
               </button>
             </div>
           </>

@@ -15,10 +15,14 @@ type SceneProps = Props & { onContextLost: () => void };
 function VillageFallback() {
   return (
     <div
-      className="h-full min-h-0 w-full bg-linear-to-b from-[#d7eef6] via-[#e7f3d8] to-[#8fb56f]"
+      className="absolute inset-0 bg-linear-to-b from-[#d7eef6] via-[#e7f3d8] to-[#8fb56f]"
       aria-hidden
     />
   );
+}
+
+function desktopWebGL() {
+  return window.matchMedia("(min-width: 1024px)").matches && canUseWebGL();
 }
 
 export function VillageView(props: Props) {
@@ -27,21 +31,31 @@ export function VillageView(props: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    if (!canUseWebGL()) {
-      setMode("2d");
-      return;
-    }
-    void import("./Village3D")
-      .then((mod) => {
-        if (cancelled) return;
-        setScene(() => mod.Village3D);
-        setMode("3d");
-      })
-      .catch(() => {
-        if (!cancelled) setMode("2d");
-      });
+    const mq = window.matchMedia("(min-width: 1024px)");
+
+    const pick = () => {
+      if (cancelled) return;
+      if (!desktopWebGL()) {
+        setScene(null);
+        setMode("2d");
+        return;
+      }
+      void import("./Village3D")
+        .then((mod) => {
+          if (cancelled || !desktopWebGL()) return;
+          setScene(() => mod.Village3D);
+          setMode("3d");
+        })
+        .catch(() => {
+          if (!cancelled) setMode("2d");
+        });
+    };
+
+    pick();
+    mq.addEventListener("change", pick);
     return () => {
       cancelled = true;
+      mq.removeEventListener("change", pick);
     };
   }, []);
 

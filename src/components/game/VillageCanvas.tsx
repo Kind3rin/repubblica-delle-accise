@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { BUILDING_LAYOUT, BUILDING_ORDER } from "@/lib/game/catalog";
+import { BUILDING_LAYOUT, BUILDING_ORDER, BUILDINGS } from "@/lib/game/catalog";
 import { drawSprite, ensureSprites } from "@/lib/game/sprites";
 import type { BuildingId, GameState } from "@/lib/game/types";
 
@@ -27,9 +27,10 @@ const SPRITE_H: Record<BuildingId, number> = {
 };
 
 function project(x: number, z: number, w: number, h: number) {
-  const scale = Math.min(w, h) * 0.3;
-  const sx = w * 0.5 + (x - z * 0.12) * scale;
-  const sy = h * 0.5 + z * scale * 0.7;
+  const portrait = h > w * 0.92;
+  const scale = Math.min(w, h) * (portrait ? 0.4 : 0.3);
+  const sx = w * 0.5 + (x - z * 0.08) * scale;
+  const sy = h * (portrait ? 0.5 : 0.5) + z * scale * (portrait ? 0.62 : 0.7);
   return { x: sx, y: sy, scale };
 }
 
@@ -275,7 +276,7 @@ export function VillageCanvas({
         const loc = BUILDING_LAYOUT[id];
         const p = project(loc.x, loc.z, w, h);
         const building = current.buildings.find((b) => b.id === id)!;
-        const height = p.scale * SPRITE_H[id] * (0.92 + building.level * 0.05);
+        const height = p.scale * SPRITE_H[id] * (1.02 + building.level * 0.05);
         const drawn = drawSprite(ctx, id, p.x, p.y + 8, height);
         if (!drawn) drawFallbackBuilding(ctx, id, p.x, p.y, p.scale, building.level);
 
@@ -295,6 +296,19 @@ export function VillageCanvas({
           ctx.beginPath();
           ctx.ellipse(p.x, p.y + 10, height * 0.32, height * 0.09, 0, 0, Math.PI * 2);
           ctx.stroke();
+          const label = BUILDINGS[id].short;
+          ctx.font = "600 12px Outfit, DM Sans, sans-serif";
+          const tw = ctx.measureText(label).width;
+          const lw = tw + 16;
+          const lx = p.x - lw / 2;
+          const ly = p.y + 16;
+          ctx.fillStyle = "rgba(17, 45, 37, 0.9)";
+          roundRect(ctx, lx, ly, lw, 20, 10);
+          ctx.fill();
+          ctx.fillStyle = "#f7f6ee";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(label, p.x, ly + 10);
         }
         hits.current.push({ id, x: p.x, y: p.y - height * 0.35, r: Math.max(36, height * 0.42) });
       }
@@ -329,7 +343,7 @@ export function VillageCanvas({
   }, [reducedMotion]);
 
   return (
-    <div ref={wrapRef} className="relative h-full min-h-0 w-full overflow-hidden">
+    <div ref={wrapRef} className="absolute inset-0 overflow-hidden bg-[#d7eef6]">
       <canvas
         ref={ref}
         className="h-full w-full touch-manipulation"
