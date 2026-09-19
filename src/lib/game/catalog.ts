@@ -96,6 +96,7 @@ export const UNITS: Record<UnitId, UnitDef> = {
   vespa: {
     id: "vespa",
     name: "Vespa Ribelle",
+    short: "Vespa",
     description: "Agile, economica e allergica ai rincari.",
     costEuros: 65,
     costOil: 25,
@@ -106,6 +107,7 @@ export const UNITS: Record<UnitId, UnitDef> = {
   ragioniere: {
     id: "ragioniere",
     name: "Ragioniere d’Assalto",
+    short: "Ragioniere",
     description: "Trova il punto debole in ogni bilancio.",
     costEuros: 100,
     costOil: 40,
@@ -116,6 +118,7 @@ export const UNITS: Record<UnitId, UnitDef> = {
   autobotte: {
     id: "autobotte",
     name: "Autobotte Popolare",
+    short: "Autobotte",
     description: "Lenta, robusta e con il serbatoio pieno.",
     costEuros: 200,
     costOil: 115,

@@ -6,6 +6,7 @@ import {
   DAILY_OIL,
   MAX_ACCUMULATION_MS,
   MAX_ARMY,
+  OPPONENTS,
   RAID_COOLDOWN_MS,
   SAVE_VERSION,
   UNITS,
@@ -103,6 +104,7 @@ export function createInitialState(now: number, townName: string): GameState {
     lastDailyAt: now - DAILY_COOLDOWN_MS,
     lastAttackAt: now - RAID_COOLDOWN_MS,
     shieldUntil: 0,
+    nextIncomingAt: now + 4 * 60 * 1000,
     totalRaids: 0,
     wins: 0,
     createdAt: now,
@@ -250,4 +252,42 @@ export function makeDiaryEvent(
 
 export function townLevel(state: GameState) {
   return Math.max(...state.buildings.map((b) => b.level));
+}
+
+export function resolveIncomingRaid(
+  state: GameState,
+  now: number,
+): { state: GameState; note: string; held: boolean } | null {
+  if (now < state.shieldUntil) return null;
+  const due = state.nextIncomingAt || state.createdAt + 4 * 60 * 1000;
+  if (now < due) return null;
+  const level = townLevel(state);
+  const pool = OPPONENTS.filter((npc) => npc.level <= level + 1);
+  const npc = pool[Math.floor(now / 997) % pool.length] ?? OPPONENTS[0];
+  const power = getArmyPower(state.army) + getDefense(state);
+  const attack = npc.defense + getArmyPower(npc.army);
+  const held = power >= attack * 0.82;
+  const nextIncomingAt = now + 3 * 60 * 1000 + (now % 5) * 60 * 1000;
+  if (held) {
+    return {
+      held: true,
+      note: `${npc.name} ha tentato un sopralluogo. Respinto. +6 prestigio.`,
+      state: { ...state, trophies: state.trophies + 6, nextIncomingAt },
+    };
+  }
+  const stolenEuros = Math.min(state.euros, Math.round(npc.euros * 0.08));
+  const stolenOil = Math.min(state.oil, Math.round(npc.oil * 0.08));
+  const vespaLoss = state.army.vespa > 0 ? 1 : 0;
+  return {
+    held: false,
+    note: `${npc.name} ha fatto un blitz. −${stolenEuros} €, −${stolenOil} L.`,
+    state: {
+      ...state,
+      euros: state.euros - stolenEuros,
+      oil: state.oil - stolenOil,
+      trophies: Math.max(0, state.trophies - 8),
+      army: { ...state.army, vespa: state.army.vespa - vespaLoss },
+      nextIncomingAt,
+    },
+  };
 }

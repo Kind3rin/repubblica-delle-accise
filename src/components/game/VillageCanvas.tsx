@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { BUILDING_LAYOUT, BUILDING_ORDER, BUILDINGS } from "@/lib/game/catalog";
+import { BUILDING_LAYOUT, BUILDING_ORDER } from "@/lib/game/catalog";
 import { drawSprite, ensureSprites } from "@/lib/game/sprites";
 import type { BuildingId, GameState } from "@/lib/game/types";
 
@@ -293,21 +293,8 @@ export function VillageCanvas({
           ctx.strokeStyle = "#f7f1dc";
           ctx.lineWidth = 3;
           ctx.beginPath();
-          ctx.ellipse(p.x, p.y + 10, height * 0.42, height * 0.12, 0, 0, Math.PI * 2);
+          ctx.ellipse(p.x, p.y + 10, height * 0.32, height * 0.09, 0, 0, Math.PI * 2);
           ctx.stroke();
-        }
-
-        if (selectedId === id) {
-          ctx.fillStyle = "rgba(247, 246, 238, 0.94)";
-          roundRect(ctx, p.x - 38, p.y + 18, 76, 30, 10);
-          ctx.fill();
-          ctx.fillStyle = C.ink;
-          ctx.font = `600 11px Outfit, sans-serif`;
-          ctx.textAlign = "center";
-          ctx.fillText(BUILDINGS[id].short, p.x, p.y + 32);
-          ctx.font = `500 10px DM Sans, sans-serif`;
-          ctx.fillStyle = "rgba(29,51,41,0.62)";
-          ctx.fillText(`Lv. ${building.level}`, p.x, p.y + 44);
         }
         hits.current.push({ id, x: p.x, y: p.y - height * 0.35, r: Math.max(36, height * 0.42) });
       }

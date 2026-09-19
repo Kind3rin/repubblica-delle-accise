@@ -37,6 +37,7 @@ export interface GameState {
   lastDailyAt: number;
   lastAttackAt: number;
   shieldUntil: number;
+  nextIncomingAt: number;
   totalRaids: number;
   wins: number;
   createdAt: number;
@@ -59,6 +60,7 @@ export interface BuildingDef {
 export interface UnitDef {
   id: UnitId;
   name: string;
+  short: string;
   description: string;
   costEuros: number;
   costOil: number;
@@ -81,7 +83,7 @@ export interface Opponent {
 export interface DiaryEvent {
   id: string;
   at: number;
-  kind: "collect" | "upgrade" | "train" | "raid" | "daily" | "found";
+  kind: "collect" | "upgrade" | "train" | "raid" | "daily" | "found" | "defense";
   text: string;
 }
 

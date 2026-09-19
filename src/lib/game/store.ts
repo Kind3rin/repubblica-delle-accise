@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import { OPPONENTS, UNIT_ORDER, emptyArmy } from "./catalog";
+import { OPPONENTS, SHIELD_DURATION_MS, UNIT_ORDER, emptyArmy } from "./catalog";
 import { createBattleFrame, deployUnit, stepBattle, survivorsOf, useAbility } from "./battle";
+import { playSfx } from "./audio";
 import {
   canRaid,
   claimDaily,
@@ -9,6 +10,7 @@ import {
   getArmyPower,
   getCapacity,
   makeDiaryEvent,
+  resolveIncomingRaid,
   returnArmy,
   settleTimers,
   startTraining,
@@ -30,6 +32,7 @@ import type {
 
 const SAVE_KEY = "rda-save-v1";
 const DIARY_KEY = "rda-diary-v1";
+const BATTLE_KEY = "rda-battle-v1";
 
 function loadSave(): { state: GameState | null; diary: DiaryEvent[] } {
   try {
@@ -40,7 +43,9 @@ function loadSave(): { state: GameState | null; diary: DiaryEvent[] } {
     const parsed = JSON.parse(raw) as GameState;
     if (!parsed || !parsed.townName) return { state: null, diary };
     const now = Date.now();
-    return { state: { ...createInitialState(now, parsed.townName), ...parsed }, diary };
+    const merged = { ...createInitialState(now, parsed.townName), ...parsed };
+    if (!parsed.nextIncomingAt) merged.nextIncomingAt = now + 4 * 60 * 1000;
+    return { state: merged, diary };
   } catch {
     return { state: null, diary: [] };
   }
@@ -55,8 +60,56 @@ function persist(state: GameState, diary: DiaryEvent[]) {
   }
 }
 
+function persistBattle(payload: {
+  battle: CombatFrame | null;
+  battleTarget: string | null;
+  lastResult: BattleResult | null;
+}) {
+  try {
+    if (!payload.battle) localStorage.removeItem(BATTLE_KEY);
+    else localStorage.setItem(BATTLE_KEY, JSON.stringify(payload));
+  } catch {
+    /* private mode */
+  }
+}
+
+function loadBattle(): {
+  battle: CombatFrame;
+  battleTarget: string;
+  lastResult: BattleResult | null;
+} | null {
+  try {
+    const raw = localStorage.getItem(BATTLE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as {
+      battle?: CombatFrame;
+      battleTarget?: string;
+      lastResult?: BattleResult | null;
+    };
+    if (!parsed.battle || !parsed.battleTarget) return null;
+    return {
+      battle: parsed.battle,
+      battleTarget: parsed.battleTarget,
+      lastResult: parsed.lastResult ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function pushDiary(diary: DiaryEvent[], event: DiaryEvent) {
   return [event, ...diary].slice(0, 40);
+}
+
+function incomingChanged(prev: GameState, next: GameState) {
+  return (
+    prev.nextIncomingAt !== next.nextIncomingAt ||
+    prev.euros !== next.euros ||
+    prev.oil !== next.oil ||
+    prev.trophies !== next.trophies ||
+    prev.army.vespa !== next.army.vespa ||
+    prev.shieldUntil !== next.shieldUntil
+  );
 }
 
 function npcState(opponentId: string, now: number, trophies: number): GameState {
@@ -112,6 +165,8 @@ type GameStore = {
   dismissToast: () => void;
 };
 
+let lastBattleWrite = 0;
+
 export const useGame = create<GameStore>((set, get) => ({
   hydrated: true,
   state: null,
@@ -129,10 +184,15 @@ export const useGame = create<GameStore>((set, get) => ({
     if (get().state) return;
     const loaded = loadSave();
     if (!loaded.state) return;
+    const pending = loadBattle();
     set({
       state: loaded.state,
       diary: loaded.diary,
       raidArmy: defaultRaid(loaded.state.army),
+      battle: pending?.battle ?? null,
+      battleTarget: pending?.battleTarget ?? null,
+      lastResult: pending?.lastResult ?? null,
+      tab: pending?.battle ? "raid" : "village",
     });
   },
   foundTown: (name) => {
@@ -153,25 +213,42 @@ export const useGame = create<GameStore>((set, get) => ({
       toast: "Benvenuto, sindaco. Il tuo comune è pronto!",
       raidArmy: { vespa: 8, ragioniere: 2, autobotte: 1 },
     });
+    playSfx("win");
   },
   setTab: (tab) => set({ tab }),
   setSelected: (id) => set({ selected: id, tab: "village" }),
   tick: (now) => {
-    const { state, diary } = get();
+    const { state, diary, battle } = get();
     if (!state) {
       set({ now });
       return;
     }
     const settled = settleTimers(state, now);
+    let nextState = settled.state;
     let nextDiary = diary;
+    let toast: string | null = null;
     if (settled.notes.length) {
       nextDiary = settled.notes.reduce(
         (acc, text) => pushDiary(acc, makeDiaryEvent("upgrade", text, now)),
         diary,
       );
-      persist(settled.state, nextDiary);
     }
-    set({ now, state: settled.state, diary: nextDiary });
+    if (!battle) {
+      const incoming = resolveIncomingRaid(nextState, now);
+      if (incoming) {
+        nextState = incoming.state;
+        nextDiary = pushDiary(nextDiary, makeDiaryEvent("defense", incoming.note, now));
+        toast = incoming.note;
+        playSfx(incoming.held ? "tap" : "alert");
+      }
+    }
+    if (nextDiary !== diary || incomingChanged(state, nextState)) persist(nextState, nextDiary);
+    set({
+      now,
+      state: nextState,
+      diary: nextDiary,
+      ...(toast ? { toast } : {}),
+    });
   },
   collect: () => {
     const { state, diary, now } = get();
@@ -187,6 +264,7 @@ export const useGame = create<GameStore>((set, get) => ({
       makeDiaryEvent("collect", `Entrate riscosse: ${Math.floor(gained.euros)} € e ${Math.floor(gained.oil)} L.`, now),
     );
     persist(next, nextDiary);
+    playSfx("collect");
     set({
       state: next,
       diary: nextDiary,
@@ -201,6 +279,7 @@ export const useGame = create<GameStore>((set, get) => ({
       const next = claimDaily(settleTimers(state, now).state, now);
       const nextDiary = pushDiary(diary, makeDiaryEvent("daily", "Fondo straordinario incassato.", now));
       persist(next, nextDiary);
+      playSfx("daily");
       set({ state: next, diary: nextDiary, toast: "Fondo straordinario incassato!", error: null });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : "Non ora." });
@@ -213,6 +292,7 @@ export const useGame = create<GameStore>((set, get) => ({
       const next = startUpgrade(settleTimers(state, now).state, id, now);
       const nextDiary = pushDiary(diary, makeDiaryEvent("upgrade", `Cantiere aperto.`, now));
       persist(next, nextDiary);
+      playSfx("upgrade");
       set({
         state: next,
         diary: nextDiary,
@@ -230,6 +310,7 @@ export const useGame = create<GameStore>((set, get) => ({
       const next = startTraining(settleTimers(state, now).state, unit, count, now);
       const nextDiary = pushDiary(diary, makeDiaryEvent("train", `Reclutamento avviato: ${count} unità.`, now));
       persist(next, nextDiary);
+      playSfx("train");
       set({
         state: next,
         diary: nextDiary,
@@ -257,10 +338,15 @@ export const useGame = create<GameStore>((set, get) => ({
       if (!opponent) throw new Error("Avamposto sconosciuto.");
       const trophies = settled.npcTrophies[opponentId] ?? opponent.level * 75;
       const defender = npcState(opponentId, now, trophies);
-      persist({ ...settled, army: remaining, lastAttackAt: now }, get().diary);
+      const nextState = { ...settled, army: remaining, lastAttackAt: now };
+      const frame = createBattleFrame(defender, { ...raidArmy });
+      persist(nextState, get().diary);
+      persistBattle({ battle: frame, battleTarget: opponentId, lastResult: null });
+      lastBattleWrite = Date.now();
+      playSfx("raid");
       set({
-        state: { ...settled, army: remaining, lastAttackAt: now },
-        battle: createBattleFrame(defender, { ...raidArmy }),
+        state: nextState,
+        battle: frame,
         battleTarget: opponentId,
         lastResult: null,
         error: null,
@@ -271,19 +357,31 @@ export const useGame = create<GameStore>((set, get) => ({
     }
   },
   deploy: (unit, count, lane) => {
-    const { battle } = get();
+    const { battle, battleTarget, lastResult } = get();
     if (!battle) return;
-    set({ battle: deployUnit(battle, unit, count, lane) });
+    const next = deployUnit(battle, unit, count, lane);
+    persistBattle({ battle: next, battleTarget, lastResult });
+    playSfx("deploy");
+    set({ battle: next });
   },
   ability: (kind) => {
-    const { battle } = get();
+    const { battle, battleTarget, lastResult } = get();
     if (!battle) return;
-    set({ battle: useAbility(battle, kind) });
+    const next = useAbility(battle, kind);
+    persistBattle({ battle: next, battleTarget, lastResult });
+    playSfx("tap");
+    set({ battle: next });
   },
   advanceBattle: (dtMs) => {
-    const { battle } = get();
+    const { battle, battleTarget, lastResult } = get();
     if (!battle || battle.finished) return;
-    set({ battle: stepBattle(battle, dtMs) });
+    const next = stepBattle(battle, dtMs);
+    set({ battle: next });
+    const t = Date.now();
+    if (next.finished || t - lastBattleWrite > 900) {
+      lastBattleWrite = t;
+      persistBattle({ battle: next, battleTarget, lastResult });
+    }
   },
   finishBattle: () => {
     const { state, battle, battleTarget, diary, now, lastResult } = get();
@@ -302,6 +400,7 @@ export const useGame = create<GameStore>((set, get) => ({
       acc[id] = survivors[id] + battle.losses[id];
       return acc;
     }, emptyArmy());
+    const shieldUntil = battle.won ? now + SHIELD_DURATION_MS : state.shieldUntil;
     const next: GameState = {
       ...state,
       army: returnArmy(state.army, survivors),
@@ -310,6 +409,10 @@ export const useGame = create<GameStore>((set, get) => ({
       trophies: Math.max(0, state.trophies + trophyDelta),
       totalRaids: state.totalRaids + 1,
       wins: state.wins + (battle.won ? 1 : 0),
+      shieldUntil,
+      nextIncomingAt: battle.won
+        ? Math.max(state.nextIncomingAt, shieldUntil + 60_000)
+        : state.nextIncomingAt,
       npcTrophies: {
         ...state.npcTrophies,
         [battleTarget]: Math.max(20, npcTrophies - (battle.won ? trophyDelta : 0)),
@@ -335,28 +438,33 @@ export const useGame = create<GameStore>((set, get) => ({
       makeDiaryEvent(
         "raid",
         battle.won
-          ? `Raid vinto contro ${opponent.name}. ${result.stars} stelle.`
+          ? `Raid vinto contro ${opponent.name}. ${result.stars} stelle. Scudo 10 minuti.`
           : `Raid respinto da ${opponent.name}.`,
         now,
       ),
     );
+    const finished = { ...battle, finished: true };
     persist(next, nextDiary);
+    persistBattle({ battle: finished, battleTarget, lastResult: result });
+    playSfx(battle.won ? "win" : "lose");
     set({
       state: next,
       diary: nextDiary,
-      battle: { ...battle, finished: true },
+      battle: finished,
       lastResult: result,
       toast: null,
       raidArmy: defaultRaid(next.army),
     });
   },
-  closeBattle: () =>
+  closeBattle: () => {
+    persistBattle({ battle: null, battleTarget: null, lastResult: null });
     set({
       battle: null,
       battleTarget: null,
       toast: get().lastResult?.won
         ? "Avamposto piegato. Le accise applaudono."
         : "Ritirata ordinata. Quasi.",
-    }),
+    });
+  },
   dismissToast: () => set({ toast: null, error: null }),
 }));

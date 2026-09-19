@@ -47,9 +47,9 @@ export function drawSprite(
   ctx.save();
   ctx.globalAlpha = opts?.alpha ?? 1;
   if (opts?.shadow !== false) {
-    ctx.fillStyle = "rgba(24, 42, 32, 0.22)";
+    ctx.fillStyle = "rgba(24, 42, 32, 0.18)";
     ctx.beginPath();
-    ctx.ellipse(cx, baselineY + 4, w * 0.28, h * 0.07, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, baselineY + 2, Math.max(8, w * 0.22), Math.max(3, h * 0.045), 0, 0, Math.PI * 2);
     ctx.fill();
   }
   if (opts?.flip) {

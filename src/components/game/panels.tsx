@@ -13,7 +13,7 @@ import {
   Warehouse,
   Wind,
 } from "lucide-react";
-import { BUILDINGS, MAX_ARMY, OPPONENTS, UNITS, UNIT_ORDER } from "@/lib/game/catalog";
+import { BUILDINGS, MAX_ARMY, OPPONENTS, RAID_COOLDOWN_MS, UNITS, UNIT_ORDER } from "@/lib/game/catalog";
 import {
   armyCount,
   canRaid,
@@ -55,40 +55,41 @@ function SpriteThumb({ src, alt }: { src: string; alt: string }) {
 }
 
 export function ResourceChip({
-  label,
   value,
   cap,
   unit,
   tone,
 }: {
-  label: string;
   value: number;
   cap?: number;
   unit: string;
   tone: "gold" | "oil" | "trophy";
 }) {
   const Icon = tone === "gold" ? Coins : tone === "oil" ? Droplets : Crown;
+  const name = tone === "gold" ? "Tesoro" : tone === "oil" ? "Petrolio" : "Prestigio";
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-2 rounded-[14px] bg-cream px-2.5 py-2 shadow-[0_2px_0_rgba(17,45,37,0.18)]">
+    <div
+      aria-label={`${name} ${formatIt(value)}${unit ? ` ${unit}` : ""}`}
+      className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl bg-cream px-1.5 py-1.5 shadow-[0_2px_0_rgba(17,45,37,0.18)] sm:justify-start sm:gap-2 sm:px-2.5 sm:py-2"
+    >
       <span
-        className={`grid size-8 shrink-0 place-items-center rounded-full ${
+        className={`grid size-7 shrink-0 place-items-center rounded-full sm:size-8 ${
           tone === "oil" ? "bg-sky text-grove" : "bg-[#f6e8be] text-[#8a6420]"
         }`}
       >
-        <Icon size={16} />
+        <Icon size={15} />
       </span>
-      <div className="min-w-0">
-        <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">{label}</p>
-        <p className="truncate font-display text-[16px] font-semibold leading-tight tabular-nums text-ink sm:text-[18px]">
-          {formatIt(value)}
-          <span className="ml-1 font-sans text-[10px] font-semibold not-italic text-muted">{unit}</span>
-          {cap != null && (
-            <span className="ml-1 font-sans text-[10px] font-medium not-italic text-muted/75">
-              / {formatIt(cap)}
-            </span>
-          )}
-        </p>
-      </div>
+      <p className="whitespace-nowrap font-display text-[15px] font-semibold leading-none tabular-nums text-ink sm:text-[17px]">
+        {formatIt(value)}
+        {unit ? (
+          <span className="ml-0.5 font-sans text-[10px] font-semibold not-italic text-muted">{unit}</span>
+        ) : null}
+        {cap != null && (
+          <span className="ml-1 hidden font-sans text-[10px] font-medium not-italic text-muted/75 sm:inline">
+            / {formatIt(cap)}
+          </span>
+        )}
+      </p>
     </div>
   );
 }
@@ -110,8 +111,8 @@ export function BuildingPanel({ state, selected, now }: { state: GameState; sele
   const canPay = state.euros >= cost.euros && state.oil >= cost.oil && building.level < cap && !busy;
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
+    <div className="flex flex-col gap-2">
+      <div className="flex gap-1 overflow-x-auto pb-0.5">
         {state.buildings.map((b) => {
           const BIcon = buildingIcons[b.id];
           const active = b.id === selected;
@@ -120,11 +121,11 @@ export function BuildingPanel({ state, selected, now }: { state: GameState; sele
               key={b.id}
               type="button"
               onClick={() => setSelected(b.id)}
-              className={`flex min-h-14 min-w-[4.6rem] flex-col items-center justify-center rounded-[14px] px-2 py-2 text-[11px] font-semibold ${
+              className={`flex min-h-12 min-w-[4.3rem] flex-col items-center justify-center rounded-[14px] px-2 py-1.5 text-[10px] font-semibold ${
                 active ? "bg-pine text-paper" : "bg-cream text-ink"
               }`}
             >
-              <BIcon size={16} />
+              <BIcon size={15} />
               <span className="whitespace-nowrap">{BUILDINGS[b.id].short}</span>
               <small className="whitespace-nowrap text-[10px] opacity-70">Lv. {b.level}</small>
             </button>
@@ -132,27 +133,27 @@ export function BuildingPanel({ state, selected, now }: { state: GameState; sele
         })}
       </div>
 
-      <div className="rounded-[22px] bg-cream p-4 shadow-[0_8px_24px_rgba(17,45,37,0.08)]">
+      <div className="rounded-[20px] bg-cream p-3 shadow-[0_8px_24px_rgba(17,45,37,0.08)] sm:p-4">
         <div className="flex items-start gap-3">
-          <span className="grid size-12 shrink-0 overflow-hidden rounded-2xl bg-pine">
+          <span className="grid size-11 shrink-0 overflow-hidden rounded-2xl bg-pine sm:size-12">
             <img src={`/sprites/${selected}.png`} alt="" className="h-full w-full object-contain" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Livello {building.level}</p>
-            <h2 className="font-display text-xl font-semibold text-ink">{def.name}</h2>
-            <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted">{def.description}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Livello {building.level}</p>
+            <h2 className="font-display text-lg font-semibold text-ink sm:text-xl">{def.name}</h2>
+            <p className="mt-0.5 line-clamp-2 text-sm leading-snug text-muted">{def.description}</p>
             <p className="mt-2 hidden text-sm italic text-grove sm:block">{def.flavor}</p>
           </div>
         </div>
 
-        <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
-          <div className="rounded-xl bg-paper px-3 py-2">
+        <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
+          <div className="rounded-xl bg-paper px-3 py-1.5">
             <dt className="text-[10px] uppercase tracking-wider text-muted">Produzione</dt>
             <dd className="font-display font-semibold tabular-nums">
               {formatIt(production.euros)} € / {formatIt(production.oil)} L a min
             </dd>
           </div>
-          <div className="rounded-xl bg-paper px-3 py-2">
+          <div className="rounded-xl bg-paper px-3 py-1.5">
             <dt className="text-[10px] uppercase tracking-wider text-muted">Capienza</dt>
             <dd className="font-display font-semibold tabular-nums">
               {formatIt(capacity.euros)} € · {formatIt(capacity.oil)} L
@@ -161,11 +162,11 @@ export function BuildingPanel({ state, selected, now }: { state: GameState; sele
         </dl>
 
         {building.upgradeEndsAt && building.upgradeEndsAt > now ? (
-          <p className="mt-3 rounded-xl bg-sky px-3 py-2 text-sm text-pine">
+          <p className="mt-2 rounded-xl bg-sky px-3 py-2 text-sm text-pine">
             Cantiere in corso · {formatTimer(building.upgradeEndsAt - now)}
           </p>
         ) : building.level >= cap ? (
-          <p className="mt-3 text-sm text-muted">
+          <p className="mt-2 text-sm text-muted">
             {selected === "municipio" ? "Livello massimo del palazzo." : "Serve un municipio più alto."}
           </p>
         ) : (
@@ -173,17 +174,17 @@ export function BuildingPanel({ state, selected, now }: { state: GameState; sele
             type="button"
             disabled={!canPay}
             onClick={() => upgrade(selected)}
-            className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-terracotta px-4 font-display text-base font-semibold text-pine-deep disabled:opacity-45"
+            className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-terracotta px-4 font-display text-base font-semibold text-pine-deep disabled:opacity-45"
           >
             Potenzia · {formatIt(cost.euros)} € · {formatIt(cost.oil)} L · {cost.duration}s
           </button>
         )}
 
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="mt-2 grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={collect}
-            className="min-h-12 rounded-2xl bg-pine px-3 font-semibold text-paper"
+            className="min-h-11 rounded-2xl bg-pine px-3 font-semibold text-paper"
           >
             Riscuoti
             {(pending.euros > 0 || pending.oil > 0) && (
@@ -196,7 +197,7 @@ export function BuildingPanel({ state, selected, now }: { state: GameState; sele
             type="button"
             onClick={daily}
             disabled={!dailyReady}
-            className="min-h-12 rounded-2xl border border-line bg-paper px-3 font-semibold text-ink disabled:opacity-45"
+            className="min-h-11 rounded-2xl border border-line bg-paper px-3 font-semibold text-ink disabled:opacity-45"
           >
             Fondo del giorno
           </button>
@@ -303,6 +304,16 @@ export function RaidView({ state, now }: { state: GameState; now: number }) {
           35 secondi, tre corsie. I caduti non tornano; le riserve sì.
         </p>
       </header>
+      {state.shieldUntil > now && (
+        <p className="rounded-2xl bg-sky px-4 py-3 text-sm text-pine">
+          Scudo attivo · {formatTimer(state.shieldUntil - now)}. I sopralluoghi restano al casello.
+        </p>
+      )}
+      {!ready && (
+        <p className="rounded-2xl bg-cream px-4 py-3 text-sm text-muted">
+          Rifornimento in corso · {formatTimer(RAID_COOLDOWN_MS - (now - state.lastAttackAt))}
+        </p>
+      )}
       {lastResult && (
         <div className="rounded-2xl bg-pine px-4 py-3 text-paper">
           <p className="font-display text-lg">
@@ -319,8 +330,8 @@ export function RaidView({ state, now }: { state: GameState; now: number }) {
         <h3 className="font-display text-lg">La tua squadra</h3>
         <div className="mt-3 space-y-2">
           {UNIT_ORDER.map((id) => (
-            <div key={id} className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold">{UNITS[id].name}</span>
+            <div key={id} className="grid grid-cols-[minmax(0,1fr)_auto_2.5rem_auto_2.25rem] items-center gap-1.5">
+              <span className="text-sm font-semibold leading-tight">{UNITS[id].short}</span>
               <button
                 type="button"
                 className="grid size-11 shrink-0 place-items-center rounded-xl bg-paper"
@@ -329,7 +340,7 @@ export function RaidView({ state, now }: { state: GameState; now: number }) {
               >
                 <Minus size={16} />
               </button>
-              <strong className="w-8 shrink-0 text-center tabular-nums">{raidArmy[id]}</strong>
+              <strong className="text-center tabular-nums">{raidArmy[id]}</strong>
               <button
                 type="button"
                 className="grid size-11 shrink-0 place-items-center rounded-xl bg-paper"
@@ -338,7 +349,7 @@ export function RaidView({ state, now }: { state: GameState; now: number }) {
               >
                 <Plus size={16} />
               </button>
-              <span className="w-10 shrink-0 text-right text-xs text-muted">/ {state.army[id]}</span>
+              <span className="text-right text-xs text-muted">/ {state.army[id]}</span>
             </div>
           ))}
         </div>

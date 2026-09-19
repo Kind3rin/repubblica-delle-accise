@@ -9,18 +9,22 @@ import {
   Medal,
   Megaphone,
   ScrollText,
+  Shield,
   Star,
   Swords,
+  Volume2,
+  VolumeX,
   X,
 } from "lucide-react";
-import { BATTLE_DURATION_MS, OPPONENTS, RADIO_QUOTES, UNITS, UNIT_ORDER } from "@/lib/game/catalog";
+import { BATTLE_DURATION_MS, OPPONENTS, UNITS, UNIT_ORDER } from "@/lib/game/catalog";
 import { LANE_IDS, laneLabel } from "@/lib/game/battle";
+import { isMuted, toggleMute, unlockAudio } from "@/lib/game/audio";
 import { getCapacity, getPendingResources } from "@/lib/game/engine";
 import { formatIt, formatTimer } from "@/lib/utils";
 import { useGame } from "@/lib/game/store";
 import type { BattleLane, Tab, UnitId } from "@/lib/game/types";
 import { BattleCanvas } from "./BattleCanvas";
-import { VillageCanvas } from "./VillageCanvas";
+import { VillageView } from "./VillageView";
 import {
   ArmyView,
   BoardView,
@@ -59,9 +63,23 @@ export function GameShell() {
   const [help, setHelp] = useState(false);
   const [reduced, setReduced] = useState(false);
   const [name, setName] = useState("");
+  const [muted, setMuted] = useState(false);
 
   useEffect(() => {
     hydrate();
+    setMuted(isMuted());
+    const unlock = () => unlockAudio();
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    const onVis = () => {
+      if (!document.hidden) unlockAudio();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [hydrate]);
 
   useEffect(() => {
@@ -118,55 +136,65 @@ export function GameShell() {
 
   const cap = getCapacity(state);
   const pending = getPendingResources(state, now);
-  const quote = RADIO_QUOTES[Math.floor(now / 12000) % RADIO_QUOTES.length];
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-[1100px] flex-col overflow-x-hidden bg-paper text-ink">
-      <header className="sticky top-0 z-20 flex flex-col gap-2 bg-pine px-3 pb-3 pt-[max(0.6rem,env(safe-area-inset-top))] text-paper shadow-[0_3px_0_rgba(17,45,37,0.35)]">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="grid size-10 rotate-[-6deg] place-items-center rounded-[13px] bg-cream text-pine shadow-[3px_3px_0_#102e25]">
-              <Fuel size={20} />
-            </span>
-            <div className="leading-tight">
-              <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-paper/70">
-                Repubblica delle
-              </p>
-              <p className="font-display text-[22px] font-extrabold tracking-[0.08em]">ACCISE</p>
-            </div>
+    <div className="mx-auto flex h-dvh max-w-[1100px] flex-col bg-paper text-ink">
+      <header className="shrink-0 bg-pine px-3 pb-2 pt-[max(0.45rem,env(safe-area-inset-top))] text-paper shadow-[0_3px_0_rgba(17,45,37,0.35)]">
+        <div className="flex items-center gap-2">
+          <span className="grid size-8 shrink-0 rotate-[-6deg] place-items-center rounded-[11px] bg-cream text-pine shadow-[2px_2px_0_#102e25]">
+            <Fuel size={16} />
+          </span>
+          <div className="min-w-0 flex-1 leading-tight">
+            <p className="truncate text-[9px] font-medium uppercase tracking-[0.16em] text-paper/65">
+              Repubblica delle Accise
+            </p>
+            <h1 className="truncate font-display text-[17px] font-extrabold tracking-tight">
+              Comune di {state.townName}
+            </h1>
           </div>
-          <div className="ml-auto">
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              aria-label={muted ? "Riattiva i suoni" : "Silenzia i suoni"}
+              onClick={() => {
+                setMuted(toggleMute());
+              }}
+              className="grid size-10 place-items-center rounded-full bg-pine-deep text-paper"
+            >
+              {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+            </button>
             <button
               type="button"
               aria-label="Come si gioca"
               onClick={() => setHelp(true)}
-              className="grid size-11 place-items-center rounded-full bg-pine-deep text-paper"
+              className="grid size-10 place-items-center rounded-full bg-pine-deep text-paper"
             >
-              <CircleHelp size={20} />
+              <CircleHelp size={18} />
             </button>
           </div>
         </div>
-        <div className="flex gap-2">
-          <ResourceChip label="Tesoro" value={state.euros} cap={cap.euros} unit="€" tone="gold" />
-          <ResourceChip label="Petrolio" value={state.oil} cap={cap.oil} unit="L" tone="oil" />
-          <ResourceChip label="Prestigio" value={state.trophies} unit="trofei" tone="trophy" />
+        <div className="mt-2 flex gap-1.5">
+          <ResourceChip value={state.euros} cap={cap.euros} unit="€" tone="gold" />
+          <ResourceChip value={state.oil} cap={cap.oil} unit="L" tone="oil" />
+          <ResourceChip value={state.trophies} unit="" tone="trophy" />
         </div>
+        <p className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] font-semibold text-paper/70">
+          {state.shieldUntil > now ? (
+            <>
+              <Shield size={12} className="text-gold" />
+              <span className="text-gold">Scudo attivo · {formatTimer(state.shieldUntil - now)}</span>
+            </>
+          ) : (
+            <span>Prossimo sopralluogo · {formatTimer(Math.max(0, (state.nextIncomingAt || now) - now))}</span>
+          )}
+        </p>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col">
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {tab === "village" ? (
-          <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_340px] lg:grid-rows-none">
-            <section className="relative h-[min(42dvh,380px)] min-h-[220px] lg:h-auto lg:min-h-0 lg:flex-1">
-              <div className="pointer-events-none absolute left-3 top-3 z-10 max-w-[min(100%-1.5rem,22rem)] rounded-2xl bg-paper/90 px-3 py-2 text-sm shadow-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
-                  Strategia all’italiana
-                </p>
-                <h1 className="font-display text-lg font-semibold leading-tight">
-                  Comune di {state.townName}
-                </h1>
-                <p className="mt-1 line-clamp-2 text-xs text-muted">{quote}</p>
-              </div>
-              <VillageCanvas
+          <div className="grid min-h-0 flex-1 grid-rows-[minmax(240px,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_340px] lg:grid-rows-none">
+            <section className="relative min-h-0">
+              <VillageView
                 state={state}
                 selected={selected}
                 onSelect={setSelected}
@@ -182,12 +210,12 @@ export function GameShell() {
                 </button>
               )}
             </section>
-            <aside className="min-h-0 overflow-y-auto border-t border-line bg-paper px-3 py-3 pb-6 lg:border-l lg:border-t-0 lg:py-4 lg:pb-4">
+            <aside className="min-h-0 max-h-[50%] overflow-y-auto border-t border-line bg-paper px-3 py-2 lg:max-h-none lg:border-l lg:border-t-0 lg:py-4">
               <BuildingPanel state={state} selected={selected} now={now} />
             </aside>
           </div>
         ) : (
-          <section className="flex-1 overflow-y-auto px-4 py-4 pb-28">
+          <section className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
             {tab === "army" && <ArmyView state={state} now={now} />}
             {tab === "raid" && <RaidView state={state} now={now} />}
             {tab === "board" && <BoardView state={state} />}
@@ -197,7 +225,7 @@ export function GameShell() {
       </main>
 
       <nav
-        className="sticky bottom-0 z-20 border-t border-pine/10 bg-paper/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur"
+        className="shrink-0 border-t border-pine/10 bg-paper px-2 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1.5"
         aria-label="Navigazione del gioco"
       >
         <div className="grid grid-cols-5 gap-1">
@@ -209,17 +237,17 @@ export function GameShell() {
                 key={item.id}
                 type="button"
                 onClick={() => setTab(item.id)}
-                className={`flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-2xl text-[11px] font-semibold ${
+                className={`flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-2xl text-[11px] font-semibold ${
                   active ? "bg-pine text-paper" : "text-muted"
                 }`}
               >
-                <Icon size={20} />
+                <Icon size={18} />
                 {item.label}
               </button>
             );
           })}
         </div>
-        <p className="mt-1 text-center text-[11px] text-muted">
+        <p className="mt-0.5 hidden text-center text-[11px] text-muted sm:block">
           Fatto in Italia. <strong className="text-ink">Tassato ovunque.</strong>
         </p>
       </nav>
@@ -227,7 +255,7 @@ export function GameShell() {
       {(toast || error) && !battle && (
         <div
           role="status"
-          className={`fixed bottom-24 left-1/2 z-30 w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl px-4 py-3 text-sm shadow-lg ${
+          className={`fixed left-1/2 top-[8.5rem] z-30 w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl px-4 py-3 text-sm shadow-lg ${
             error ? "bg-[#6a3b2c] text-paper" : "bg-pine text-paper"
           }`}
         >
@@ -319,6 +347,9 @@ function HelpModal({ onClose }: { onClose: () => void }) {
           <li>
             <strong>Parti per un raid.</strong> 35 secondi, tre corsie. Adunata aumenta danni e velocità; Fumogeno zittisce le difese.
           </li>
+          <li>
+            <strong>Difendi il borgo.</strong> Ogni tanto arriva un sopralluogo. Vince un raid e ottieni 10 minuti di scudo.
+          </li>
         </ol>
         <p className="mt-4 rounded-2xl bg-sky px-4 py-3 text-sm text-pine">
           <strong>Un gioco, una satira.</strong> Personaggi, decreti, prezzi e risorse sono inventati. Nessun
@@ -347,6 +378,12 @@ function BattleOverlay() {
   const left = Math.max(0, BATTLE_DURATION_MS - battle.elapsed);
   const opponent = OPPONENTS.find((o) => o.id === battleTarget);
   const done = battle.finished && lastResult;
+
+  useEffect(() => {
+    if (battle.reserve[unit] > 0) return;
+    const next = UNIT_ORDER.find((id) => battle.reserve[id] > 0);
+    if (next) setUnit(next);
+  }, [battle.reserve, unit]);
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-pine-deep text-paper">
@@ -447,7 +484,7 @@ function BattleOverlay() {
                     }`}
                   >
                     <Icon size={14} className="mb-1" />
-                    <strong className="block truncate">{UNITS[id].name}</strong>
+                    <strong className="block leading-tight">{UNITS[id].short}</strong>
                     riserva {battle.reserve[id]}
                   </button>
                 );
